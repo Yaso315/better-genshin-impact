@@ -1035,6 +1035,8 @@ namespace BetterGenshinImpact.GameTask.AutoFishing
 
                     PutRects(imageRegion, _target, _cursor, new Rect());
 
+                    // 注释掉鼠标控制部分，不执行实际操作
+                    /*
                     if (_cursor.X < _target.X)
                     {
                         if (_prevMouseEvent != MOUSEEVENTF.MOUSEEVENTF_LEFTDOWN)
@@ -1055,6 +1057,7 @@ namespace BetterGenshinImpact.GameTask.AutoFishing
                             //Debug.WriteLine("进度超出 左键松开");
                         }
                     }
+                    */
                 }
                 else if (rects.Count == 3)
                 {
@@ -1066,6 +1069,8 @@ namespace BetterGenshinImpact.GameTask.AutoFishing
                     _right = rects[2];
                     PutRects(imageRegion, _left, _cursor, _right);
 
+                    // 注释掉鼠标控制部分，不执行实际操作
+                    /*
                     if (_right.X + _right.Width - (_cursor.X + _cursor.Width) <= _cursor.X - _left.X)
                     {
                         if (_prevMouseEvent == MOUSEEVENTF.MOUSEEVENTF_LEFTDOWN)
@@ -1086,6 +1091,7 @@ namespace BetterGenshinImpact.GameTask.AutoFishing
                             //Debug.WriteLine("未到框内中间 左键按下");
                         }
                     }
+                    */
                 }
                 else
                 {
@@ -1112,9 +1118,8 @@ namespace BetterGenshinImpact.GameTask.AutoFishing
                 logger.LogInformation("  拉扯结束");
                 logger.LogInformation(@"└------------------------┘");
 
-                // 保证鼠标松开
-                input.Mouse.LeftButtonUp();
-
+                // 不再发送鼠标事件
+                // input.Mouse.LeftButtonUp();
 
                 return BehaviourStatus.Succeeded;
             }
