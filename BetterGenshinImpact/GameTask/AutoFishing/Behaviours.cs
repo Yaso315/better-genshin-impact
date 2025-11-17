@@ -264,7 +264,7 @@ namespace BetterGenshinImpact.GameTask.AutoFishing
         {
             input.Mouse.LeftButtonDown();
             blackboard.pitchReset = true;
-            logger.LogInformation("长按举起鱼竿");
+            logger.LogInformation("长按举起鱼竿1");
         }
 
         protected override BehaviourStatus Update(ImageRegion context)
@@ -321,7 +321,7 @@ namespace BetterGenshinImpact.GameTask.AutoFishing
 
             input.Mouse.LeftButtonDown();
             blackboard.pitchReset = true;
-            logger.LogInformation("长按举起鱼竿");
+            logger.LogInformation("长按举起鱼竿2");
         }
 
         protected override void OnTerminate(BehaviourStatus status)
@@ -860,14 +860,46 @@ namespace BetterGenshinImpact.GameTask.AutoFishing
                 using var tipsRa = imageRegion.Derive((Rect)currentBiteWordsTips + liftingWordsAreaRect.Location);
                 tipsRa.DrawSelf("FishBiteTips");
 
-                return RaiseRod("文字块");
+                // 跳过自动提竿操作，直接返回成功状态
+                logger.LogInformation("检测到鱼儿上钩，跳过自动提竿操作");
+               
+                drawContent.RemoveRect("FishBiteTips");
+                return BehaviourStatus.Succeeded;
             }
 
             // 图像提竿判断
             using var liftRodButtonRa = imageRegion.Find(blackboard.AutoFishingAssets.LiftRodButtonRo);
             if (!liftRodButtonRa.IsEmpty())
             {
-                return RaiseRod("图像识别");
+                // 跳过自动提竿操作，直接返回成功状态
+                logger.LogInformation("检测到提竿按钮，跳过自动提竿操作");
+                string txtDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "auto", "txt");
+                if (Directory.Exists(txtDir))
+                {
+                    var txtFiles = Directory.GetFiles(txtDir, "*.txt")
+                        .Select(f => new FileInfo(f))
+                        .OrderByDescending(fi => fi.CreationTime)
+                        .FirstOrDefault();
+            
+                    if (txtFiles != null)
+                    {
+                        // 读取现有内容
+                        var lines = File.ReadAllLines(txtFiles.FullName).ToList();
+                
+                        // 检查是否已经存在state字段
+                        bool hasState = lines.Any(line => line.StartsWith("state2="));
+                
+                        // 如果不存在state字段，则添加state=2
+                        if (!hasState)
+                        {
+                            lines.Add($"state2={DateTimeOffset.Now.ToUnixTimeSeconds()}");
+                            lines.Add("status2=1");
+                            File.WriteAllLines(txtFiles.FullName, lines);
+                            logger.LogInformation("已向文件 {FilePath} 添加 state=2", txtFiles.FullName);
+                        }
+                    }
+                }
+                return BehaviourStatus.Succeeded;
             }
 
             // OCR 提竿判断
@@ -875,7 +907,35 @@ namespace BetterGenshinImpact.GameTask.AutoFishing
 
             if (!string.IsNullOrEmpty(text) && StringUtils.RemoveAllSpace(text).Contains(this.getABiteLocalizedString))
             {
-                return RaiseRod("OCR");
+                // 跳过自动提竿操作，直接返回成功状态
+                logger.LogInformation("OCR检测到鱼儿上钩，跳过自动提竿操作");
+                string txtDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "auto", "txt");
+                if (Directory.Exists(txtDir))
+                {
+                    var txtFiles = Directory.GetFiles(txtDir, "*.txt")
+                        .Select(f => new FileInfo(f))
+                        .OrderByDescending(fi => fi.CreationTime)
+                        .FirstOrDefault();
+            
+                    if (txtFiles != null)
+                    {
+                        // 读取现有内容
+                        var lines = File.ReadAllLines(txtFiles.FullName).ToList();
+                
+                        // 检查是否已经存在state字段
+                        bool hasState = lines.Any(line => line.StartsWith("state2="));
+                
+                        // 如果不存在state字段，则添加state=2
+                        if (!hasState)
+                        {
+                            lines.Add($"state2={DateTimeOffset.Now.ToUnixTimeSeconds()}");
+                            lines.Add("status2=1");
+                            File.WriteAllLines(txtFiles.FullName, lines);
+                            logger.LogInformation("已向文件 {FilePath} 添加 state=2", txtFiles.FullName);
+                        }
+                    }
+                }
+                return BehaviourStatus.Succeeded;
             }
 
             return BehaviourStatus.Running;
@@ -883,11 +943,28 @@ namespace BetterGenshinImpact.GameTask.AutoFishing
 
         private BehaviourStatus RaiseRod(string method)
         {
-                
-           
-            input.Mouse.LeftButtonClick();
-            logger.LogInformation(@"┌------------------------┐");
-            // 记录钓上鱼的时间state2和钓到鱼了status2=1
+            // 此方法现在不会被调用，因为我们直接在Update中返回了Succeeded状态
+            return BehaviourStatus.Succeeded;
+        }
+    }
+
+    /// <summary>
+    /// 进入钓鱼界面先尝试获取钓鱼框的位置
+    /// </summary>
+    public class GetFishBoxArea : BaseBehaviour<ImageRegion>
+    {
+        private readonly Blackboard blackboard;
+        private readonly TimeProvider timeProvider;
+        private DateTimeOffset? waitFishBoxAppearEndTime;
+        public GetFishBoxArea(string name, Blackboard blackboard, ILogger logger, bool saveScreenshotOnTerminat, TimeProvider? timeProvider = null) : base(name, logger, saveScreenshotOnTerminat)
+        {
+            this.blackboard = blackboard;
+            this.timeProvider = timeProvider ?? TimeProvider.System;
+        }
+
+        protected override void OnInitialize()
+        {
+            logger.LogInformation("钓鱼框识别开始");
             string txtDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "auto", "txt");
             if (Directory.Exists(txtDir))
             {
@@ -914,29 +991,6 @@ namespace BetterGenshinImpact.GameTask.AutoFishing
                     }
                 }
             }
-            logger.LogInformation("  自动提竿({m})", method);
-            drawContent.RemoveRect("FishBiteTips");
-            return BehaviourStatus.Succeeded;
-        }
-    }
-
-    /// <summary>
-    /// 进入钓鱼界面先尝试获取钓鱼框的位置
-    /// </summary>
-    public class GetFishBoxArea : BaseBehaviour<ImageRegion>
-    {
-        private readonly Blackboard blackboard;
-        private readonly TimeProvider timeProvider;
-        private DateTimeOffset? waitFishBoxAppearEndTime;
-        public GetFishBoxArea(string name, Blackboard blackboard, ILogger logger, bool saveScreenshotOnTerminat, TimeProvider? timeProvider = null) : base(name, logger, saveScreenshotOnTerminat)
-        {
-            this.blackboard = blackboard;
-            this.timeProvider = timeProvider ?? TimeProvider.System;
-        }
-
-        protected override void OnInitialize()
-        {
-            logger.LogInformation("钓鱼框识别开始");
             waitFishBoxAppearEndTime = timeProvider.GetLocalNow().AddSeconds(5);
         }
 
@@ -1027,6 +1081,15 @@ namespace BetterGenshinImpact.GameTask.AutoFishing
 
         protected override BehaviourStatus Update(ImageRegion imageRegion)
         {
+            // 跳过Fishing节点，直接返回成功状态
+            logger.LogInformation("跳过钓鱼拉条操作，直接进入下一步");
+            drawContent.RemoveRect("FishBox");
+            _prevMouseEvent = MOUSEEVENTF.MOUSEEVENTF_LEFTUP;
+            logger.LogInformation("  拉扯结束");
+            logger.LogInformation(@"└------------------------┘");
+            return BehaviourStatus.Succeeded;
+
+            /*
             using var fishBarMat = new Mat(imageRegion.SrcMat, blackboard.fishBoxRect);
             var rects = AutoFishingImageRecognition.GetFishBarRect(fishBarMat);
             if (rects != null && rects.Count > 0)
@@ -1088,7 +1151,7 @@ namespace BetterGenshinImpact.GameTask.AutoFishing
                         }
                     }
                     */
-                }
+                /*}
                 else if (rects.Count == 3)
                 {
                     // 游标矩形在区间内会检测到三个矩形，即目标区间被游标分割成左半和右半
@@ -1122,7 +1185,7 @@ namespace BetterGenshinImpact.GameTask.AutoFishing
                         }
                     }
                     */
-                }
+                /*}
                 else
                 {
                     PutRects(imageRegion, new Rect(), new Rect(), new Rect());
@@ -1157,24 +1220,20 @@ namespace BetterGenshinImpact.GameTask.AutoFishing
 
             noDetectionDuringTime = null;
             return BehaviourStatus.Running;
+            */
         }
 
-        private void PutRects(ImageRegion imageRegion, Rect left, Rect cur, Rect right)
+        private void PutRects(ImageRegion imageRegion, Rect target, Rect cursor, Rect right)
         {
-            //var list = new List<RectDrawable>
-            //{
-            //    left.ToWindowsRectangleOffset(_fishBoxRect.X, _fishBoxRect.Y).ToRectDrawable(System.Drawing.Pens.Red),
-            //    cur.ToWindowsRectangleOffset(_fishBoxRect.X, _fishBoxRect.Y).ToRectDrawable(System.Drawing.Pens.Red),
-            //    right.ToWindowsRectangleOffset(_fishBoxRect.X, _fishBoxRect.Y).ToRectDrawable(System.Drawing.Pens.Red)
-            //};
-            using var fishBoxRa = imageRegion.Derive(blackboard.fishBoxRect);
-            var list = new List<RectDrawable>
-                {
-                    fishBoxRa.ToRectDrawable(left, "left", System.Drawing.Pens.Red),
-                    fishBoxRa.ToRectDrawable(cur, "cur", System.Drawing.Pens.Red),
-                    fishBoxRa.ToRectDrawable(right, "right", System.Drawing.Pens.Red),
-                }.Where(r => r.Rect.Height != 0).ToList();
-            drawContent.PutOrRemoveRectList("FishingBarAll", list);
+            //VisionContext.Instance().DrawContent.PutRect("Target", target.Offset(blackboard.fishBoxRect.X, blackboard.fishBoxRect.Y).ToRectDrawable(new Pen(Color.Cyan, 2)));
+            //VisionContext.Instance().DrawContent.PutRect("Cursor", cursor.Offset(blackboard.fishBoxRect.X, blackboard.fishBoxRect.Y).ToRectDrawable(new Pen(Color.Yellow, 2)));
+            //VisionContext.Instance().DrawContent.PutRect("Right", right.Offset(blackboard.fishBoxRect.X, blackboard.fishBoxRect.Y).ToRectDrawable(new Pen(Color.Cyan, 2)));
+            using var boxRa = imageRegion.Derive(blackboard.fishBoxRect);
+            using var pen1 = new System.Drawing.Pen(Color.Cyan, 2);
+            using var pen2 = new System.Drawing.Pen(Color.Yellow, 2);
+            boxRa.DrawSelf("Target", pen1);
+            boxRa.DrawSelf("Cursor", pen2);
+            boxRa.DrawSelf("Right", pen1);
         }
     }
 
