@@ -666,12 +666,13 @@ namespace BetterGenshinImpact.GameTask.AutoFishing
                 var lines = File.ReadAllLines(txtFiles.FullName).ToList();
                 
                 // 检查是否已经存在state字段
-                bool hasState = lines.Any(line => line.StartsWith("state="));
+                bool hasState = lines.Any(line => line.StartsWith("state1="));
                 
                 // 如果不存在state字段，则添加state=1
                 if (!hasState)
                 {
-                    lines.Add("state=1");
+                    lines.Add($"state1={DateTimeOffset.Now.ToUnixTimeSeconds()}");
+                    lines.Add("status=1");
                     File.WriteAllLines(txtFiles.FullName, lines);
                     logger.LogInformation("已向文件 {FilePath} 添加 state=1", txtFiles.FullName);
                 }
@@ -698,15 +699,15 @@ namespace BetterGenshinImpact.GameTask.AutoFishing
                 // 读取现有内容
                 var lines = File.ReadAllLines(txtFiles.FullName).ToList();
                 
-                // 检查是否已经存在state字段
-                bool hasState = lines.Any(line => line.StartsWith("state="));
+                // 检查是否已经存在state1字段
+                bool hasState = lines.Any(line => line.StartsWith("state1="));
                 
-                // 如果不存在state字段，则添加state=0
+                // 如果不存在state1字段，则添加state1=0
                 if (!hasState)
                 {
-                    lines.Add("state=0");
+                    lines.Add("state1=0");
                     File.WriteAllLines(txtFiles.FullName, lines);
-                    logger.LogInformation("已向文件 {FilePath} 添加 state=0", txtFiles.FullName);
+                    logger.LogInformation("已向文件 {FilePath} 添加 state1=0", txtFiles.FullName);
                 }
             }
         }
@@ -882,8 +883,37 @@ namespace BetterGenshinImpact.GameTask.AutoFishing
 
         private BehaviourStatus RaiseRod(string method)
         {
+                
+           
             input.Mouse.LeftButtonClick();
             logger.LogInformation(@"┌------------------------┐");
+            // 记录钓上鱼的时间state2和钓到鱼了status2=1
+            string txtDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "auto", "txt");
+            if (Directory.Exists(txtDir))
+            {
+                var txtFiles = Directory.GetFiles(txtDir, "*.txt")
+                    .Select(f => new FileInfo(f))
+                    .OrderByDescending(fi => fi.CreationTime)
+                    .FirstOrDefault();
+            
+                if (txtFiles != null)
+                {
+                    // 读取现有内容
+                    var lines = File.ReadAllLines(txtFiles.FullName).ToList();
+                
+                    // 检查是否已经存在state字段
+                    bool hasState = lines.Any(line => line.StartsWith("state2="));
+                
+                    // 如果不存在state字段，则添加state=2
+                    if (!hasState)
+                    {
+                        lines.Add($"state2={DateTimeOffset.Now.ToUnixTimeSeconds()}");
+                        lines.Add("status2=1");
+                        File.WriteAllLines(txtFiles.FullName, lines);
+                        logger.LogInformation("已向文件 {FilePath} 添加 state=2", txtFiles.FullName);
+                    }
+                }
+            }
             logger.LogInformation("  自动提竿({m})", method);
             drawContent.RemoveRect("FishBiteTips");
             return BehaviourStatus.Succeeded;
