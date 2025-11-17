@@ -25,6 +25,7 @@ Tmp/
 /packages/
 node_modules/
 github_actions_cache/
+Assets
 
 *.zip
 
