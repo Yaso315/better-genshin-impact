@@ -638,26 +638,83 @@ namespace BetterGenshinImpact.GameTask.AutoFishing
             hasChecked = false;
         }
 
-        protected override BehaviourStatus Update(ImageRegion imageRegion)
-        {
-            if (timeProvider.GetLocalNow() < timeDelay || hasChecked)
-            {
-                return BehaviourStatus.Running;
-            }
+       protected override BehaviourStatus Update(ImageRegion imageRegion)
+{
+    if (timeProvider.GetLocalNow() < timeDelay || hasChecked)
+    {
+        return BehaviourStatus.Running;
+    }
 
-            using Region btnRectArea = imageRegion.Find(blackboard.AutoFishingAssets.BaitButtonRo);
-            if (btnRectArea.IsEmpty())
+    using Region btnRectArea = imageRegion.Find(blackboard.AutoFishingAssets.BaitButtonRo);
+    if (btnRectArea.IsEmpty())
+    {
+        hasChecked = true;
+        logger.LogInformation("抛竿成功");
+        
+        // 抛竿成功时添加state=1
+        string txtDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "auto", "txt");
+        if (Directory.Exists(txtDir))
+        {
+            var txtFiles = Directory.GetFiles(txtDir, "*.txt")
+                                   .Select(f => new FileInfo(f))
+                                   .OrderByDescending(fi => fi.CreationTime)
+                                   .FirstOrDefault();
+            
+            if (txtFiles != null)
             {
-                hasChecked = true;
-                logger.LogInformation("抛竿成功");
-                return BehaviourStatus.Running;
-            }
-            else
-            {
-                logger.LogInformation("抛竿失败");
-                return BehaviourStatus.Failed;
+                // 读取现有内容
+                var lines = File.ReadAllLines(txtFiles.FullName).ToList();
+                
+                // 检查是否已经存在state字段
+                bool hasState = lines.Any(line => line.StartsWith("state="));
+                
+                // 如果不存在state字段，则添加state=1
+                if (!hasState)
+                {
+                    lines.Add("state=1");
+                    File.WriteAllLines(txtFiles.FullName, lines);
+                    logger.LogInformation("已向文件 {FilePath} 添加 state=1", txtFiles.FullName);
+                }
             }
         }
+        
+        return BehaviourStatus.Running;
+    }
+    else
+    {
+        logger.LogInformation("抛竿失败");
+        
+        // 抛竿失败时添加state=0
+        string txtDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "auto", "txt");
+        if (Directory.Exists(txtDir))
+        {
+            var txtFiles = Directory.GetFiles(txtDir, "*.txt")
+                                   .Select(f => new FileInfo(f))
+                                   .OrderByDescending(fi => fi.CreationTime)
+                                   .FirstOrDefault();
+            
+            if (txtFiles != null)
+            {
+                // 读取现有内容
+                var lines = File.ReadAllLines(txtFiles.FullName).ToList();
+                
+                // 检查是否已经存在state字段
+                bool hasState = lines.Any(line => line.StartsWith("state="));
+                
+                // 如果不存在state字段，则添加state=0
+                if (!hasState)
+                {
+                    lines.Add("state=0");
+                    File.WriteAllLines(txtFiles.FullName, lines);
+                    logger.LogInformation("已向文件 {FilePath} 添加 state=0", txtFiles.FullName);
+                }
+            }
+        }
+        
+        return BehaviourStatus.Failed;
+    }
+}
+
     }
 
     public class FishBiteTimeout : BaseBehaviour<ImageRegion>
