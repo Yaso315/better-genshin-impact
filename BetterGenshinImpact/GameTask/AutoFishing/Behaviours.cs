@@ -22,6 +22,7 @@ using System.Collections.Frozen;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Globalization;
+using System.IO;
 using System.Linq;
 using static Vanara.PInvoke.User32;
 using Color = System.Drawing.Color;
@@ -532,9 +533,49 @@ namespace BetterGenshinImpact.GameTask.AutoFishing
                 {
                     // 成功 抛竿
                     input.Mouse.LeftButtonUp();
+    
+                    // 保存自动钓鱼截取的图片和rodinput坐标
+                    try
+                    {
+                        // 获取当前时间戳作为文件名
+                        string timestamp = DateTime.Now.ToString("yyyyMMddHHmmssfff");
+        
+                        // 创建目录
+                        string imgDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "auto", "img");
+                        string txtDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "auto", "txt");
+        
+                        Directory.CreateDirectory(imgDir);
+                        Directory.CreateDirectory(txtDir);
+        
+                        // 保存截图
+                        string imgPath = Path.Combine(imgDir, $"{timestamp}.png");
+                        imageRegion.SrcMat.SaveImage(imgPath);
+        
+                        // 保存rodInput坐标数据
+                        string txtPath = Path.Combine(txtDir, $"{timestamp}.txt");
+                        string rodData = $"rod_x1={rodInput.rod_x1}\n" +
+                                         $"rod_x2={rodInput.rod_x2}\n" +
+                                         $"rod_y1={rodInput.rod_y1}\n" +
+                                         $"rod_y2={rodInput.rod_y2}\n" +
+                                         $"fish_x1={rodInput.fish_x1}\n" +
+                                         $"fish_x2={rodInput.fish_x2}\n" +
+                                         $"fish_y1={rodInput.fish_y1}\n" +
+                                         $"fish_y2={rodInput.fish_y2}\n" +
+                                         $"fish_label={rodInput.fish_label}";
+                        File.WriteAllText(txtPath, rodData);
+        
+                        // 打印日志
+                        logger.LogInformation($"已保存抛竿数据：截图 {imgPath}，坐标 {txtPath}");
+                    }
+                    catch (Exception ex)
+                    {
+                        logger.LogError(ex, "保存抛竿数据失败");
+                    }
+    
                     logger.LogInformation("尝试钓取 {Text}", currentFish.FishType.ChineseName);
                     return BehaviourStatus.Succeeded;
                 }
+
                 else if (state == 1)
                 {
                     // 太近
@@ -608,6 +649,7 @@ namespace BetterGenshinImpact.GameTask.AutoFishing
             if (btnRectArea.IsEmpty())
             {
                 hasChecked = true;
+                logger.LogInformation("抛竿成功");
                 return BehaviourStatus.Running;
             }
             else
