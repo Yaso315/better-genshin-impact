@@ -340,184 +340,50 @@ namespace BetterGenshinImpact.GameTask.AutoFishing
 
         protected override BehaviourStatus Update(ImageRegion imageRegion)
         {
-            // 找 鱼饵落点
-            var result = blackboard.Predictor.Predictor.Detect(imageRegion.CacheImage);
-            Debug.WriteLine($"YOLOv8识别: {result.Speed}");
-            var fishpond = new Fishpond(result, includeTarget: timeProvider.GetLocalNow() <= ignoreObtainedEndTime);
-            blackboard.fishpond = fishpond;
-            Random _rd = new();
-            if (fishpond.TargetRect == null || fishpond.TargetRect == default)
+            try
             {
-                if (!foundTarget)
+                // 找 鱼饵落点
+                var result = blackboard.Predictor.Predictor.Detect(imageRegion.CacheImage);
+                Debug.WriteLine($"YOLOv8识别: {result.Speed}");
+                var fishpond = new Fishpond(result, includeTarget: timeProvider.GetLocalNow() <= ignoreObtainedEndTime);
+                blackboard.fishpond = fishpond;
+                Random _rd = new();
+                if (fishpond.TargetRect == null || fishpond.TargetRect == default)
                 {
-                    if (timeProvider.GetLocalNow() <= findTargetEndTime)
+                    if (!foundTarget)
                     {
-                        // 上下移动视角方便看落点
-                        mouseMoveR += Math.PI / 16d;
-                        input.Mouse.MoveMouseBy(0, mouseMoveI * 80 * Math.Sign(Math.Cos(mouseMoveR)));
-                        blackboard.Sleep(100);
-                        return BehaviourStatus.Running;
-                    }
-                    else
-                    {
-                        logger.LogInformation("举起鱼竿失败，始终没有找到落点");
-                        input.Mouse.LeftButtonUp();
-                        blackboard.Sleep(2000);
-                        input.Mouse.LeftButtonClick();
-                        blackboard.Sleep(800);
-
-                        blackboard.throwRodNoTarget = true;
-                        blackboard.throwRodNoTargetTimes++;
-                        if (blackboard.throwRodNoTargetTimes > 2)
+                        if (timeProvider.GetLocalNow() <= findTargetEndTime)
                         {
-                            logger.LogWarning("没有找到落点次数过多，目前位置可能视野不佳，退出");
-                            blackboard.abort = true;
+                            // 上下移动视角方便看落点
+                            mouseMoveR += Math.PI / 16d;
+                            input.Mouse.MoveMouseBy(0, mouseMoveI * 80 * Math.Sign(Math.Cos(mouseMoveR)));
+                            blackboard.Sleep(100);
+                            return BehaviourStatus.Running;
                         }
+                        else
+                        {
+                            logger.LogInformation("举起鱼竿失败，始终没有找到落点");
+                            input.Mouse.LeftButtonUp();
+                            blackboard.Sleep(2000);
+                            input.Mouse.LeftButtonClick();
+                            blackboard.Sleep(800);
 
-                        return BehaviourStatus.Failed;
-                    }
-                }
+                            blackboard.throwRodNoTarget = true;
+                            blackboard.throwRodNoTargetTimes++;
+                            if (blackboard.throwRodNoTargetTimes > 2)
+                            {
+                                logger.LogWarning("没有找到落点次数过多，目前位置可能视野不佳，退出");
+                                blackboard.abort = true;
+                            }
 
-                noPlacementTimes++;
-                blackboard.Sleep(50);
-                Debug.WriteLine($"{noPlacementTimes}次未找到鱼饵落点");
-
-                var cX = imageRegion.CacheImage.Width / 2;
-                var cY = imageRegion.CacheImage.Height / 2;
-                var rdX = _rd.Next(0, imageRegion.CacheImage.Width);
-                var rdY = _rd.Next(0, imageRegion.CacheImage.Height);
-
-                var moveX = 100 * (cX - rdX) / imageRegion.CacheImage.Width;
-                var moveY = 100 * (cY - rdY) / imageRegion.CacheImage.Height;
-
-                input.Mouse.MoveMouseBy(moveX, moveY);
-
-                if (noPlacementTimes > 25)
-                {
-                    logger.LogInformation("中途丢失鱼饵落点，重试");
-                    input.Mouse.LeftButtonUp();
-                    blackboard.Sleep(2000);
-                    input.Mouse.LeftButtonClick();
-                    blackboard.Sleep(2000);    //此处需要久一点
-                    return BehaviourStatus.Failed;
-                }
-
-                return BehaviourStatus.Running;
-            }
-            else
-            {
-                foundTarget = true;
-            }
-
-            Rect fishpondTargetRect = (Rect)fishpond.TargetRect;
-
-            // 找到落点最近的鱼
-            currentFish = null;
-            BaitType[] ignoredBaits = blackboard.throwRodNoBaitFishFailures.GroupBy(f => f).Where(g => g.Count() >= MAX_NO_BAIT_FISH_TIMES).Select(g => g.Key).ToArray();
-            var list = fishpond.Fishes
-                .Where(f => !ignoredBaits.Contains(f.FishType.BaitType))   // 不能是已经失败两次的饵;
-                .Where(f => f.FishType.BaitType == blackboard.selectedBait).OrderByDescending(f => f.Confidence)
-                .ToList();
-            if (list.Count > 0)
-            {
-                currentFish = list.OrderBy(f => f.Rect.GetCenterPoint().DistanceTo(fishpond.TargetRect.Value.GetCenterPoint())).ThenByDescending(fish => fish.Confidence).First();
-            }
-
-            if (currentFish == null)
-            {
-                Debug.WriteLine("无鱼饵适用鱼");
-                noTargetFishTimes++;
-
-                if (noTargetFishTimes > 10)
-                {
-                    // 没有找到鱼饵适用鱼，重新选择鱼饵
-                    blackboard.throwRodNoBaitFish = true;
-                    if (blackboard.selectedBait == null)
-                    {
-                        throw new NullReferenceException();
-                    }
-                    blackboard.throwRodNoBaitFishFailures.Add(blackboard.selectedBait.Value);
-                    if (blackboard.throwRodNoBaitFishFailures.Count(f => f == blackboard.selectedBait) >= MAX_NO_BAIT_FISH_TIMES)
-                    {
-                        logger.LogWarning("本次将忽略{bait}", blackboard.selectedBait.GetDescription());
+                            return BehaviourStatus.Failed;
+                        }
                     }
 
-                    blackboard.selectedBait = null;
-                    logger.LogInformation("没有找到鱼饵适用鱼");
-                    input.Mouse.LeftButtonUp();
-                    blackboard.Sleep(2000);
-                    input.Mouse.LeftButtonClick();
-                    blackboard.Sleep(800);
+                    noPlacementTimes++;
+                    blackboard.Sleep(50);
+                    Debug.WriteLine($"{noPlacementTimes}次未找到鱼饵落点");
 
-                    return BehaviourStatus.Succeeded;
-                }
-
-                return BehaviourStatus.Running;
-            }
-            else
-            {
-                noTargetFishTimes = 0;
-                imageRegion.DrawRect(fishpondTargetRect, "Target", System.Drawing.Pens.White);
-                imageRegion.Derive(currentFish.Rect).DrawSelf("Fish");
-
-                // drawContent.PutRect("Target", fishpond.TargetRect.ToRectDrawable());
-                // drawContent.PutRect("Fish", currentFish.Rect.ToRectDrawable());
-
-                // 来自 HutaoFisher 的抛竿技术
-                var rod = fishpondTargetRect;
-                var fish = currentFish.Rect;
-                if (ScaleMax1080PCaptureRect == default)  // todo 等配置能注入后和SystemInfo.ScaleMax1080PCaptureRect放到一起
-                {
-                    if (imageRegion.Width > 1920)
-                    {
-                        var scale = imageRegion.Width / 1920d;
-                        ScaleMax1080PCaptureRect = new Rect(imageRegion.X, imageRegion.Y, 1920, (int)(imageRegion.Height / scale));
-                    }
-                    else
-                    {
-                        ScaleMax1080PCaptureRect = new Rect(imageRegion.X, imageRegion.Y, imageRegion.Width, imageRegion.Height);
-                    }
-                }
-                var dx = NormalizeXTo1024(fish.Left + fish.Right - rod.Left - rod.Right) / 2.0;
-                var dy = NormalizeYTo576(fish.Top + fish.Bottom - rod.Top - rod.Bottom) / 2.0;
-                var dl = Math.Sqrt(dx * dx + dy * dy);
-                //logger.LogInformation("dl = {dl}", dl);
-
-                RodInput rodInput = new RodInput
-                {
-                    rod_x1 = NormalizeXTo1024(rod.Left),
-                    rod_x2 = NormalizeXTo1024(rod.Right),
-                    rod_y1 = NormalizeYTo576(rod.Top),
-                    rod_y2 = NormalizeYTo576(rod.Bottom),
-                    fish_x1 = NormalizeXTo1024(fish.Left),
-                    fish_x2 = NormalizeXTo1024(fish.Right),
-                    fish_y1 = NormalizeYTo576(fish.Top),
-                    fish_y2 = NormalizeYTo576(fish.Bottom),
-                    fish_label = BigFishType.GetIndex(currentFish.FishType)
-                };
-                int state = this.useTorch ? new RodNet().GetRodState_Torch(rodInput) : RodNet.GetRodState(rodInput);
-
-                // 如果hutao钓鱼暂时没有更新导致报错，可以先用这段凑合
-                //int state;
-                //System.Drawing.Rectangle rod3XRectangle = new System.Drawing.Rectangle(rod.Left - rod.Width, rod.Top - rod.Height, rod.Width * 3, rod.Height * 3);
-                //System.Drawing.Rectangle rod5XRectangle = new System.Drawing.Rectangle(rod.Left - rod.Width * 2, rod.Top - rod.Height * 2, rod.Width * 5, rod.Height * 5);
-                //System.Drawing.Rectangle fishRectangle = new System.Drawing.Rectangle(fish.Left, fish.Top, fish.Width, fish.Height);
-                //if (rod3XRectangle.IntersectsWith(fishRectangle))
-                //{
-                //    state = 1;
-                //}
-                //else if (rod5XRectangle.IntersectsWith(fishRectangle))
-                //{
-                //    state = 0;
-                //}
-                //else
-                //{
-                //    state = 2;
-                //}
-
-                if (state == -1)
-                {
-                    // 失败 随机移动鼠标
                     var cX = imageRegion.CacheImage.Width / 2;
                     var cY = imageRegion.CacheImage.Height / 2;
                     var rdX = _rd.Next(0, imageRegion.CacheImage.Width);
@@ -526,73 +392,215 @@ namespace BetterGenshinImpact.GameTask.AutoFishing
                     var moveX = 100 * (cX - rdX) / imageRegion.CacheImage.Width;
                     var moveY = 100 * (cY - rdY) / imageRegion.CacheImage.Height;
 
-                    logger.LogInformation("失败 随机移动 {DX}, {DY}", moveX, moveY);
                     input.Mouse.MoveMouseBy(moveX, moveY);
+
+                    if (noPlacementTimes > 25)
+                    {
+                        logger.LogInformation("中途丢失鱼饵落点，重试");
+                        input.Mouse.LeftButtonUp();
+                        blackboard.Sleep(2000);
+                        input.Mouse.LeftButtonClick();
+                        blackboard.Sleep(2000);    //此处需要久一点
+                        return BehaviourStatus.Failed;
+                    }
+
+                    return BehaviourStatus.Running;
                 }
-                else if (state == 0)
+                else
                 {
-                    // 成功 抛竿
-                    input.Mouse.LeftButtonUp();
-    
-                    // 保存自动钓鱼截取的图片和rodinput坐标
-                    try
-                    {
-                        // 获取当前时间戳作为文件名
-                        string timestamp = DateTime.Now.ToString("yyyyMMddHHmmssfff");
-        
-                        // 创建目录
-                        string imgDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "auto", "img");
-                        string txtDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "auto", "txt");
-        
-                        Directory.CreateDirectory(imgDir);
-                        Directory.CreateDirectory(txtDir);
-        
-                        // 保存截图
-                        string imgPath = Path.Combine(imgDir, $"{timestamp}.png");
-                        imageRegion.SrcMat.SaveImage(imgPath);
-        
-                        // 保存rodInput坐标数据
-                        string txtPath = Path.Combine(txtDir, $"{timestamp}.txt");
-                        string rodData = $"rod_x1={rodInput.rod_x1}\n" +
-                                         $"rod_x2={rodInput.rod_x2}\n" +
-                                         $"rod_y1={rodInput.rod_y1}\n" +
-                                         $"rod_y2={rodInput.rod_y2}\n" +
-                                         $"fish_x1={rodInput.fish_x1}\n" +
-                                         $"fish_x2={rodInput.fish_x2}\n" +
-                                         $"fish_y1={rodInput.fish_y1}\n" +
-                                         $"fish_y2={rodInput.fish_y2}\n" +
-                                         $"fish_label={rodInput.fish_label}";
-                        File.WriteAllText(txtPath, rodData);
-        
-                        // 打印日志
-                        logger.LogInformation($"已保存抛竿数据：截图 {imgPath}，坐标 {txtPath}");
-                    }
-                    catch (Exception ex)
-                    {
-                        logger.LogError(ex, "保存抛竿数据失败");
-                    }
-    
-                    logger.LogInformation("尝试钓取 {Text}", currentFish.FishType.ChineseName);
-                    return BehaviourStatus.Succeeded;
+                    foundTarget = true;
                 }
 
-                else if (state == 1)
+                Rect fishpondTargetRect = (Rect)fishpond.TargetRect;
+
+                // 找到落点最近的鱼
+                currentFish = null;
+                BaitType[] ignoredBaits = blackboard.throwRodNoBaitFishFailures.GroupBy(f => f).Where(g => g.Count() >= MAX_NO_BAIT_FISH_TIMES).Select(g => g.Key).ToArray();
+                var list = fishpond.Fishes
+                    .Where(f => !ignoredBaits.Contains(f.FishType.BaitType))   // 不能是已经失败两次的饵;
+                    .Where(f => f.FishType.BaitType == blackboard.selectedBait).OrderByDescending(f => f.Confidence)
+                    .ToList();
+                if (list.Count > 0)
                 {
-                    // 太近
-                    // set a minimum step
-                    dx = dx / dl * 30;
-                    dy = dy / dl * 30;
-                    // _logger.LogInformation("太近 移动 {DX}, {DY}", dx, dy);
-                    input.Mouse.MoveMouseBy((int)(-dx / 1.5), (int)(-dy * 1.5));
+                    currentFish = list.OrderBy(f => f.Rect.GetCenterPoint().DistanceTo(fishpond.TargetRect.Value.GetCenterPoint())).ThenByDescending(fish => fish.Confidence).First();
                 }
-                else if (state == 2)
+
+                if (currentFish == null)
                 {
-                    // 太远
-                    // _logger.LogInformation("太远 移动 {DX}, {DY}", dx, dy);
-                    input.Mouse.MoveMouseBy((int)(dx / 1.5), (int)(dy * 1.5));
+                    Debug.WriteLine("无鱼饵适用鱼");
+                    noTargetFishTimes++;
+
+                    if (noTargetFishTimes > 10)
+                    {
+                        // 没有找到鱼饵适用鱼，重新选择鱼饵
+                        blackboard.throwRodNoBaitFish = true;
+                        if (blackboard.selectedBait == null)
+                        {
+                            throw new NullReferenceException();
+                        }
+                        blackboard.throwRodNoBaitFishFailures.Add(blackboard.selectedBait.Value);
+                        if (blackboard.throwRodNoBaitFishFailures.Count(f => f == blackboard.selectedBait) >= MAX_NO_BAIT_FISH_TIMES)
+                        {
+                            logger.LogWarning("本次将忽略{bait}", blackboard.selectedBait.GetDescription());
+                        }
+
+                        blackboard.selectedBait = null;
+                        logger.LogInformation("没有找到鱼饵适用鱼");
+                        input.Mouse.LeftButtonUp();
+                        blackboard.Sleep(2000);
+                        input.Mouse.LeftButtonClick();
+                        blackboard.Sleep(800);
+
+                        return BehaviourStatus.Succeeded;
+                    }
+
+                    return BehaviourStatus.Running;
                 }
-                blackboard.Sleep((int)dl);
-                return BehaviourStatus.Running;
+                else
+                {
+                    noTargetFishTimes = 0;
+                    imageRegion.DrawRect(fishpondTargetRect, "Target", System.Drawing.Pens.White);
+                    imageRegion.Derive(currentFish.Rect).DrawSelf("Fish");
+
+                    // drawContent.PutRect("Target", fishpond.TargetRect.ToRectDrawable());
+                    // drawContent.PutRect("Fish", currentFish.Rect.ToRectDrawable());
+
+                    // 来自 HutaoFisher 的抛竿技术
+                    var rod = fishpondTargetRect;
+                    var fish = currentFish.Rect;
+                    if (ScaleMax1080PCaptureRect == default)  // todo 等配置能注入后和SystemInfo.ScaleMax1080PCaptureRect放到一起
+                    {
+                        if (imageRegion.Width > 1920)
+                        {
+                            var scale = imageRegion.Width / 1920d;
+                            ScaleMax1080PCaptureRect = new Rect(imageRegion.X, imageRegion.Y, 1920, (int)(imageRegion.Height / scale));
+                        }
+                        else
+                        {
+                            ScaleMax1080PCaptureRect = new Rect(imageRegion.X, imageRegion.Y, imageRegion.Width, imageRegion.Height);
+                        }
+                    }
+                    var dx = NormalizeXTo1024(fish.Left + fish.Right - rod.Left - rod.Right) / 2.0;
+                    var dy = NormalizeYTo576(fish.Top + fish.Bottom - rod.Top - rod.Bottom) / 2.0;
+                    var dl = Math.Sqrt(dx * dx + dy * dy);
+                    //logger.LogInformation("dl = {dl}", dl);
+
+                    RodInput rodInput = new RodInput
+                    {
+                        rod_x1 = NormalizeXTo1024(rod.Left),
+                        rod_x2 = NormalizeXTo1024(rod.Right),
+                        rod_y1 = NormalizeYTo576(rod.Top),
+                        rod_y2 = NormalizeYTo576(rod.Bottom),
+                        fish_x1 = NormalizeXTo1024(fish.Left),
+                        fish_x2 = NormalizeXTo1024(fish.Right),
+                        fish_y1 = NormalizeYTo576(fish.Top),
+                        fish_y2 = NormalizeYTo576(fish.Bottom),
+                        fish_label = BigFishType.GetIndex(currentFish.FishType)
+                    };
+                    int state = this.useTorch ? new RodNet().GetRodState_Torch(rodInput) : RodNet.GetRodState(rodInput);
+
+                    // 如果hutao钓鱼暂时没有更新导致报错，可以先用这段凑合
+                    //int state;
+                    //System.Drawing.Rectangle rod3XRectangle = new System.Drawing.Rectangle(rod.Left - rod.Width, rod.Top - rod.Height, rod.Width * 3, rod.Height * 3);
+                    //System.Drawing.Rectangle rod5XRectangle = new System.Drawing.Rectangle(rod.Left - rod.Width * 2, rod.Top - rod.Height * 2, rod.Width * 5, rod.Height * 5);
+                    //System.Drawing.Rectangle fishRectangle = new System.Drawing.Rectangle(fish.Left, fish.Top, fish.Width, fish.Height);
+                    //if (rod3XRectangle.IntersectsWith(fishRectangle))
+                    //{
+                    //    state = 1;
+                    //}
+                    //else if (rod5XRectangle.IntersectsWith(fishRectangle))
+                    //{
+                    //    state = 0;
+                    //}
+                    //else
+                    //{
+                    //    state = 2;
+                    //}
+
+                    if (state == -1)
+                    {
+                        // 失败 随机移动鼠标
+                        var cX = imageRegion.CacheImage.Width / 2;
+                        var cY = imageRegion.CacheImage.Height / 2;
+                        var rdX = _rd.Next(0, imageRegion.CacheImage.Width);
+                        var rdY = _rd.Next(0, imageRegion.CacheImage.Height);
+
+                        var moveX = 100 * (cX - rdX) / imageRegion.CacheImage.Width;
+                        var moveY = 100 * (cY - rdY) / imageRegion.CacheImage.Height;
+
+                        logger.LogInformation("失败 随机移动 {DX}, {DY}", moveX, moveY);
+                        input.Mouse.MoveMouseBy(moveX, moveY);
+                    }
+                    else if (state == 0)
+                    {
+                        // 成功 抛竿
+                        input.Mouse.LeftButtonUp();
+    
+                        // 保存自动钓鱼截取的图片和rodinput坐标
+                        try
+                        {
+                            // 获取当前时间戳作为文件名
+                            string timestamp = DateTime.Now.ToString("yyyyMMddHHmmssfff");
+        
+                            // 创建目录
+                            string imgDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "auto", "img");
+                            string txtDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "auto", "txt");
+        
+                            Directory.CreateDirectory(imgDir);
+                            Directory.CreateDirectory(txtDir);
+        
+                            // 保存截图
+                            string imgPath = Path.Combine(imgDir, $"{timestamp}.png");
+                            imageRegion.SrcMat.SaveImage(imgPath);
+        
+                            // 保存rodInput坐标数据
+                            string txtPath = Path.Combine(txtDir, $"{timestamp}.txt");
+                            string rodData = $"rod_x1={rodInput.rod_x1}\n" +
+                                             $"rod_x2={rodInput.rod_x2}\n" +
+                                             $"rod_y1={rodInput.rod_y1}\n" +
+                                             $"rod_y2={rodInput.rod_y2}\n" +
+                                             $"fish_x1={rodInput.fish_x1}\n" +
+                                             $"fish_x2={rodInput.fish_x2}\n" +
+                                             $"fish_y1={rodInput.fish_y1}\n" +
+                                             $"fish_y2={rodInput.fish_y2}\n" +
+                                             $"fish_label={rodInput.fish_label}";
+                            File.WriteAllText(txtPath, rodData);
+        
+                            // 打印日志
+                            logger.LogInformation($"已保存抛竿数据：截图 {imgPath}，坐标 {txtPath}");
+                        }
+                        catch (Exception ex)
+                        {
+                            logger.LogError(ex, "保存抛竿数据失败");
+                        }
+    
+                        logger.LogInformation("尝试钓取 {Text}", currentFish.FishType.ChineseName);
+                        return BehaviourStatus.Succeeded;
+                    }
+
+                    else if (state == 1)
+                    {
+                        // 太近
+                        // set a minimum step
+                        dx = dx / dl * 30;
+                        dy = dy / dl * 30;
+                        // _logger.LogInformation("太近 移动 {DX}, {DY}", dx, dy);
+                        input.Mouse.MoveMouseBy((int)(-dx / 1.5), (int)(-dy * 1.5));
+                    }
+                    else if (state == 2)
+                    {
+                        // 太远
+                        // _logger.LogInformation("太远 移动 {DX}, {DY}", dx, dy);
+                        input.Mouse.MoveMouseBy((int)(dx / 1.5), (int)(dy * 1.5));
+                    }
+                    blackboard.Sleep((int)dl);
+                    return BehaviourStatus.Running;
+                }
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "抛竿过程中发生异常");
+                return BehaviourStatus.Failed;
             }
         }
 
